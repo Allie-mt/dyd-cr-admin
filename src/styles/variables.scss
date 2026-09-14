@@ -1,0 +1,32 @@
+// ===== CR+ 平台后台 · 设计变量 =====
+@use 'sass:color';
+
+// 主题色
+$primary: #0060a6;
+$primary-dark: #004e8a;
+$primary-deep: #003a68;
+
+// 主题色浅底（由 color.mix 预生成，组件直接引用）
+$primary-hover-bg: color.mix(#fff, $primary, 93%);
+$primary-soft-bg: color.mix(#fff, $primary, 92%);
+$primary-faint-bg: color.mix(#fff, $primary, 94%);
+$primary-avatar-bg: color.mix(#fff, $primary, 85%);
+
+// 功能色
+$success: #16a34a;
+$warning: #d97706;
+$danger: #dc2626;
+$info: #64748b;
+
+// 中性色
+$text-main: #1f2937;
+$text-regular: #4b5563;
+$text-secondary: #9ca3af;
+$border-color: #e5e7eb;
+
+// 布局尺寸
+$sidebar-width: 220px;
+$sidebar-collapsed-width: 64px;
+$navbar-height: 56px;
+$bg-page: #f5f7fa;
+$bg-sidebar: #ffffff;

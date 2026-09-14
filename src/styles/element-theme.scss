@@ -1,0 +1,22 @@
+@use './variables.scss' as *;
+@use 'sass:color';
+
+// ===== Element Plus 主题覆盖（主题色 #0060a6） =====
+:root {
+  // 主色及混合色阶（与官方 light/dark 规则一致）
+  --el-color-primary: #{$primary};
+  --el-color-primary-dark-2: #{color.mix(black, $primary, 20%)};
+  --el-color-primary-light-3: #{color.mix(#fff, $primary, 70%)};
+  --el-color-primary-light-5: #{color.mix(#fff, $primary, 50%)};
+  --el-color-primary-light-7: #{color.mix(#fff, $primary, 30%)};
+  --el-color-primary-light-8: #{color.mix(#fff, $primary, 20%)};
+  --el-color-primary-light-9: #{color.mix(#fff, $primary, 10%)};
+
+  // 品牌圆角
+  --el-border-radius-base: 6px;
+  --el-border-radius-small: 4px;
+
+  // 字体
+  --el-font-family: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei',
+    'Helvetica Neue', Arial, sans-serif;
+}

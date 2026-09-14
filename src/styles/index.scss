@@ -1,0 +1,95 @@
+@use './variables.scss' as *;
+
+// ===== 全局基础样式 =====
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  font-family: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei',
+    'Helvetica Neue', Arial, sans-serif;
+  color: $text-main;
+  background: $bg-page;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  text-decoration: none;
+  color: $primary;
+}
+
+// 滚动条美化（暗色细条）
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #c4ccd6;
+  border-radius: 3px;
+
+  &:hover {
+    background: #9aa6b5;
+  }
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+// ===== 通用工具类 =====
+.page-container {
+  padding: 16px;
+}
+
+.card-panel {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 37, 71, 0.06);
+}
+
+// 搜索栏区域
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+
+  .filter-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+
+  .filter-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .filter-label {
+    font-size: 14px;
+    color: #606266;
+  }
+
+  .filter-right {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+  }
+}
+
+// 表格分页容器
+.pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
