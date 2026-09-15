@@ -1,40 +1,54 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute, type RouteRecordRaw } from 'vue-router'
-import { useAppStore } from '@/stores/app'
+import { computed } from "vue";
+import { useRoute, type RouteRecordRaw } from "vue-router";
+import { useAppStore } from "@/stores/app";
+import { hasPermission } from "@/utils/checkPermisson";
 
-const appStore = useAppStore()
-const route = useRoute()
+const appStore = useAppStore();
+const route = useRoute();
 
 interface MenuItem {
-  path: string
-  title: string
-  icon?: string
-  children?: { path: string; title: string }[]
+  path: string;
+  title: string;
+  icon?: string;
+  children?: { path: string; title: string }[];
 }
 
-// 从主布局路由下读取菜单，保持单一数据源
+// 从主布局路由下读取菜单，保持单一数据源，并根据权限过滤
 const menus = computed<MenuItem[]>(() => {
-  const mainRoute = route.matched.find((item) => item.path === '/')
+  const mainRoute = route.matched.find((item) => item.path === "/");
   return (mainRoute?.children || [])
-    .filter((child: RouteRecordRaw) => child.meta?.title)
+    .filter((child: RouteRecordRaw) => {
+      if (!child.meta?.title) return false;
+      if (child.meta?.permission && !hasPermission(child.meta.permission as string)) return false;
+      return true;
+    })
     .map((child: RouteRecordRaw) => ({
-      path: '/' + child.path,
+      path: "/" + child.path,
       title: child.meta?.title as string,
       icon: child.meta?.icon as string | undefined,
       children: child.children?.length
         ? child.children
-            .filter((sub) => sub.meta?.title)
+            .filter((sub) => {
+              if (!sub.meta?.title) return false;
+              if (sub.meta?.permission && !hasPermission(sub.meta.permission as string))
+                return false;
+              return true;
+            })
             .map((sub) => ({
-              path: '/' + child.path + '/' + sub.path,
+              path: "/" + child.path + "/" + sub.path,
               title: sub.meta?.title as string,
             }))
         : undefined,
     }))
-})
+    .filter((menu) => {
+      if (menu.children) return menu.children.length > 0;
+      return true;
+    });
+});
 
-const activeMenu = computed(() => route.path)
-const expandedKeys = computed(() => [route.matched.find((m) => m.children?.length)?.path || ''])
+const activeMenu = computed(() => route.path);
+const expandedKeys = computed(() => [route.matched.find((m) => m.children?.length)?.path || ""]);
 </script>
 
 <template>

@@ -1,9 +1,18 @@
-import {
-  createRouter,
-  createWebHistory,
-  type RouteRecordRaw,
-} from "vue-router";
+import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 import { useUserStore } from "@/stores/user";
+import { hasPermission } from "@/utils/checkPermisson";
+import myLocalStorage from "@/utils/myLocalStorage";
+
+import enterprise from "./modules/enterprise";
+import cuser from "./modules/cuser";
+import role from "./modules/role";
+import featureSwitch from "./modules/featureSwitch";
+import auditLog from "./modules/auditLog";
+import whitelist from "./modules/whitelist";
+
+const whiteList: string[] = ["/login"];
+
+const asyncRoutes: RouteRecordRaw[] = [enterprise, cuser, role, featureSwitch, auditLog, whitelist];
 
 const routes: RouteRecordRaw[] = [
   {
@@ -15,99 +24,12 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/",
     component: () => import("@/layout/index.vue"),
-    redirect: "/dashboard",
-    children: [
-      {
-        path: "dashboard",
-        name: "Dashboard",
-        component: () => import("@/views/dashboard/index.vue"),
-        meta: { title: "首页", icon: "Odometer" },
-      },
-      // ===== 企业管理（B 端） =====
-      {
-        path: "enterprise",
-        name: "Enterprise",
-        component: () => import("@/views/enterprise/index.vue"),
-        meta: { title: "企业管理", icon: "OfficeBuilding" },
-      },
-      // ===== C 端用户管理 =====
-      {
-        path: "cuser",
-        name: "CUser",
-        component: () => import("@/views/cuser/index.vue"),
-        meta: { title: "C端用户管理", icon: "User" },
-      },
-      // ===== 角色与权限管理 =====
-      {
-        path: "role",
-        redirect: "/role/platform",
-        meta: { title: "角色与权限管理", icon: "Key" },
-        children: [
-          {
-            path: "platform",
-            name: "PlatformRole",
-            component: () => import("@/views/role/platform.vue"),
-            meta: { title: "平台角色" },
-          },
-          {
-            path: "accounts",
-            name: "Accounts",
-            component: () => import("@/views/role/accounts.vue"),
-            meta: { title: "后台账号" },
-          },
-        ],
-      },
-      // ===== 功能开关管理 =====
-      {
-        path: "feature-switch",
-        redirect: "/feature-switch/points",
-        meta: { title: "功能开关管理", icon: "Open" },
-        children: [
-          {
-            path: "points",
-            name: "PermPoints",
-            component: () => import("@/views/feature-switch/points.vue"),
-            meta: { title: "权限点管理" },
-          },
-          {
-            path: "models",
-            name: "ModelSwitch",
-            component: () => import("@/views/feature-switch/models.vue"),
-            meta: { title: "模型开关" },
-          },
-          {
-            path: "funcs",
-            name: "FuncSwitch",
-            component: () => import("@/views/feature-switch/funcs.vue"),
-            meta: { title: "功能开关" },
-          },
-          {
-            path: "benefits",
-            name: "Benefits",
-            component: () => import("@/views/feature-switch/benefits.vue"),
-            meta: { title: "会员权益配置" },
-          },
-        ],
-      },
-      // ===== 审计日志 =====
-      {
-        path: "audit-log",
-        name: "AuditLog",
-        component: () => import("@/views/audit-log/index.vue"),
-        meta: { title: "审计日志", icon: "Document" },
-      },
-      // ===== 白名单管理 =====
-      {
-        path: "whitelist",
-        name: "Whitelist",
-        component: () => import("@/views/whitelist/index.vue"),
-        meta: { title: "白名单管理", icon: "CircleCheck" },
-      },
-    ],
+    redirect: "/enterprise",
+    children: asyncRoutes,
   },
   {
     path: "/:pathMatch(.*)*",
-    redirect: "/dashboard",
+    redirect: "/enterprise",
   },
 ];
 
@@ -116,19 +38,67 @@ const router = createRouter({
   routes,
 });
 
-// 登录守卫：无 token 一律回登录页
-router.beforeEach((to) => {
-  const userStore = useUserStore();
-  const pageTitle =
-    to.meta.title || (to.matched.at(-1)?.meta?.title as string | undefined);
+router.beforeEach(async (to) => {
+  const pageTitle = to.meta.title || (to.matched.at(-1)?.meta?.title as string | undefined);
   document.title = pageTitle ? `${pageTitle} · CR+ 平台后台` : "CR+ 平台后台";
 
-  if (!userStore.token && to.name !== "Login") {
-    return { name: "Login", query: { redirect: to.fullPath } };
+  if (whiteList.includes(to.path)) {
+    const userStore = useUserStore();
+    if (to.path === "/login" && userStore.userRoleName) {
+      return { path: "/" };
+    }
+    return true;
   }
-  if (userStore.token && to.name === "Login") {
-    return { path: "/" };
+
+  const userStore = useUserStore();
+
+  let isLoggedIn = !!userStore.userRoleName;
+
+  if (!isLoggedIn) {
+    const token = myLocalStorage.getLocalToken();
+    isLoggedIn = token !== "";
+
+    if (isLoggedIn && !userStore.userRoleName) {
+      try {
+        userStore.initUserInfo();
+
+        if (!userStore.permissionIdList || !userStore.permissionIdList.length) {
+          try {
+            await userStore.getPermissionIds();
+          } catch (error) {
+            return { path: "/login", query: { redirectUrl: encodeURIComponent(to.fullPath) } };
+          }
+        }
+
+        if (!userStore.permissionIdList.length) {
+          throw new Error("getPermissionIds");
+        }
+
+        isLoggedIn = !!userStore.userRoleName;
+      } catch (error) {
+        console.error("从 token 恢复用户信息失败:", error);
+        isLoggedIn = false;
+      }
+    }
   }
+
+  if (!isLoggedIn) {
+    return { path: "/login", query: { redirectUrl: encodeURIComponent(to.fullPath) } };
+  }
+
+  const requiredPermission = to.meta?.permission as string | undefined;
+  if (requiredPermission && !hasPermission(requiredPermission)) {
+    const firstPermittedRoute = asyncRoutes.find(
+      (child) => !child.meta?.permission || hasPermission(child.meta.permission as string),
+    );
+    if (firstPermittedRoute) {
+      return { path: "/" + firstPermittedRoute.path, replace: true };
+    }
+    return { path: "/login" };
+  }
+
+  return true;
 });
 
+export { asyncRoutes };
 export default router;

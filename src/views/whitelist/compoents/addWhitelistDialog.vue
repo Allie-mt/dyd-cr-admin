@@ -2,23 +2,8 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
-
-type WlType = "功能" | "模型" | "规格";
-
-interface WhitelistRow {
-  id: number;
-  userId: number;
-  nickname: string;
-  phone: string;
-  type: WlType;
-  perm: string;
-  expireMode: "永久" | "固定时长" | "到期日";
-  expireAt: string;
-  status: "active" | "revoked" | "expired";
-  operator: string;
-  createdAt: string;
-  remark: string;
-}
+import { addWhitelist, batchAddWhitelist } from "@/api/whitelist";
+import type { WlType, WhitelistRow } from "@/api/whitelist";
 
 const props = defineProps<{ modelValue: boolean }>();
 const emit = defineEmits<{
@@ -116,14 +101,9 @@ function resetForms() {
   });
 }
 
-function calcExpire(
-  mode: "永久" | "固定时长" | "到期日",
-  days: number,
-  date: string,
-) {
+function calcExpire(mode: "永久" | "固定时长" | "到期日", days: number, date: string) {
   if (mode === "永久") return "永久";
-  if (mode === "固定时长")
-    return `2026-${String(9 + Math.floor(days / 30)).padStart(2, "0")}-14`;
+  if (mode === "固定时长") return `2026-${String(9 + Math.floor(days / 30)).padStart(2, "0")}-14`;
   return date;
 }
 
@@ -144,30 +124,19 @@ function submitSingle() {
     return;
   }
   const user = userOptions.find((u) => u.id === singleForm.userId)!;
-  const row: WhitelistRow = {
-    id: Date.now(),
+  addWhitelist({
     userId: user.id,
-    nickname: user.nickname,
-    phone: user.phone,
     type: singleForm.type,
     perm: singleForm.perm,
     expireMode: singleForm.expireMode,
-    expireAt: calcExpire(
-      singleForm.expireMode,
-      singleForm.days,
-      singleForm.expireAt,
-    ),
-    status: "active",
-    operator: "系统管理员",
-    createdAt: "2026-09-14 10:00",
+    expireAt: calcExpire(singleForm.expireMode, singleForm.days, singleForm.expireAt),
     remark: singleForm.remark || "单个开白",
-  };
-  visible.value = false;
-  resetForms();
-  emit("submitted", row);
-  ElMessage.success(
-    `已为「${user.nickname}」开白「${singleForm.perm}」，已写入审计日志`,
-  );
+  }).then((row) => {
+    visible.value = false;
+    resetForms();
+    emit("submitted", row);
+    ElMessage.success(`已为「${user.nickname}」开白「${singleForm.perm}」，已写入审计日志`);
+  });
 }
 
 function submitBatch() {
@@ -175,32 +144,18 @@ function submitBatch() {
     ElMessage.warning("请勾选权限点");
     return;
   }
-  const cond = [
-    batchForm.level,
-    batchForm.phonePrefix && `手机号段 ${batchForm.phonePrefix}`,
-  ].filter(Boolean);
-  const row: WhitelistRow = {
-    id: Date.now() + 1,
-    userId: 0,
-    nickname: `批量（${cond.join(" / ") || "全部用户"}）`,
-    phone: "36 人",
+  batchAddWhitelist({
+    userIds: [],
     type: batchForm.type,
     perm: batchForm.perm,
     expireMode: batchForm.expireMode,
-    expireAt: calcExpire(
-      batchForm.expireMode,
-      batchForm.days,
-      batchForm.expireAt,
-    ),
-    status: "active",
-    operator: "系统管理员",
-    createdAt: "2026-09-14 10:00",
+    expireAt: calcExpire(batchForm.expireMode, batchForm.days, batchForm.expireAt),
     remark: batchForm.remark || "批量开白",
-  };
-  visible.value = false;
-  resetForms();
-  emit("submitted", row);
-  ElMessage.success("已按条件为 36 名用户批量开白，已写入审计日志");
+  }).then(() => {
+    visible.value = false;
+    resetForms();
+    ElMessage.success("已按条件为 36 名用户批量开白，已写入审计日志");
+  });
 }
 
 function submitImport() {
@@ -212,45 +167,26 @@ function submitImport() {
     ElMessage.warning("请粘贴用户名单（手机号/UID，每行一个）并勾选权限点");
     return;
   }
-  const row: WhitelistRow = {
-    id: Date.now() + 2,
-    userId: 0,
-    nickname: `名单导入（${lines.length} 人）`,
-    phone: lines.slice(0, 2).join(" / ") + (lines.length > 2 ? " …" : ""),
+  batchAddWhitelist({
+    userIds: [],
     type: importForm.type,
     perm: importForm.perm,
     expireMode: importForm.expireMode,
-    expireAt: calcExpire(
-      importForm.expireMode,
-      importForm.days,
-      importForm.expireAt,
-    ),
-    status: "active",
-    operator: "系统管理员",
-    createdAt: "2026-09-14 10:00",
+    expireAt: calcExpire(importForm.expireMode, importForm.days, importForm.expireAt),
     remark: importForm.remark || "名单导入开白",
-  };
-  visible.value = false;
-  resetForms();
-  emit("submitted", row);
-  ElMessage.success(`已为名单内 ${lines.length} 名用户开白，已写入审计日志`);
+  }).then(() => {
+    visible.value = false;
+    resetForms();
+    ElMessage.success(`已为名单内 ${lines.length} 名用户开白，已写入审计日志`);
+  });
 }
 
 const submitLabel = () =>
-  addTab.value === "single"
-    ? "确认开白"
-    : addTab.value === "batch"
-      ? "批量开白"
-      : "导入并开白";
+  addTab.value === "single" ? "确认开白" : addTab.value === "batch" ? "批量开白" : "导入并开白";
 </script>
 
 <template>
-  <el-dialog
-    v-model="visible"
-    title="开白名单"
-    width="580px"
-    @close="resetForms"
-  >
+  <el-dialog v-model="visible" title="开白名单" width="580px" @close="resetForms">
     <el-tabs v-model="addTab">
       <!-- 单个添加 -->
       <el-tab-pane label="单个添加" name="single">
@@ -283,12 +219,7 @@ const submitLabel = () =>
               placeholder="勾选要开白的权限点"
               style="width: 100%"
             >
-              <el-option
-                v-for="p in permOptions[singleForm.type]"
-                :key="p"
-                :label="p"
-                :value="p"
-              />
+              <el-option v-for="p in permOptions[singleForm.type]" :key="p" :label="p" :value="p" />
             </el-select>
           </el-form-item>
           <el-form-item label="有效期" required>
@@ -298,16 +229,10 @@ const submitLabel = () =>
               <el-radio-button value="到期日">到某日期</el-radio-button>
             </el-radio-group>
           </el-form-item>
-          <el-form-item
-            v-if="singleForm.expireMode === '固定时长'"
-            label="时长（天）"
-          >
+          <el-form-item v-if="singleForm.expireMode === '固定时长'" label="时长（天）">
             <el-input-number v-model="singleForm.days" :min="1" :max="365" />
           </el-form-item>
-          <el-form-item
-            v-if="singleForm.expireMode === '到期日'"
-            label="到期日期"
-          >
+          <el-form-item v-if="singleForm.expireMode === '到期日'" label="到期日期">
             <el-date-picker
               v-model="singleForm.expireAt"
               type="date"
@@ -316,10 +241,7 @@ const submitLabel = () =>
             />
           </el-form-item>
           <el-form-item label="备注">
-            <el-input
-              v-model="singleForm.remark"
-              placeholder="开通原因，便于追溯"
-            />
+            <el-input v-model="singleForm.remark" placeholder="开通原因，便于追溯" />
           </el-form-item>
         </el-form>
       </el-tab-pane>
@@ -334,12 +256,7 @@ const submitLabel = () =>
               clearable
               style="width: 130px"
             >
-              <el-option
-                v-for="l in levelOptions"
-                :key="l"
-                :label="l"
-                :value="l"
-              />
+              <el-option v-for="l in levelOptions" :key="l" :label="l" :value="l" />
             </el-select>
             <el-date-picker
               v-model="batchForm.registerRange"
@@ -352,11 +269,7 @@ const submitLabel = () =>
             />
           </el-form-item>
           <el-form-item label="手机号段">
-            <el-input
-              v-model="batchForm.phonePrefix"
-              placeholder="如 138"
-              style="width: 130px"
-            />
+            <el-input v-model="batchForm.phonePrefix" placeholder="如 138" style="width: 130px" />
           </el-form-item>
           <el-form-item label="白名单类型" required>
             <el-radio-group v-model="batchForm.type">
@@ -366,17 +279,8 @@ const submitLabel = () =>
             </el-radio-group>
           </el-form-item>
           <el-form-item label="权限点" required>
-            <el-select
-              v-model="batchForm.perm"
-              placeholder="统一勾选权限点"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="p in permOptions[batchForm.type]"
-                :key="p"
-                :label="p"
-                :value="p"
-              />
+            <el-select v-model="batchForm.perm" placeholder="统一勾选权限点" style="width: 100%">
+              <el-option v-for="p in permOptions[batchForm.type]" :key="p" :label="p" :value="p" />
             </el-select>
           </el-form-item>
           <el-form-item label="有效期" required>
@@ -386,16 +290,10 @@ const submitLabel = () =>
               <el-radio-button value="到期日">到某日期</el-radio-button>
             </el-radio-group>
           </el-form-item>
-          <el-form-item
-            v-if="batchForm.expireMode === '固定时长'"
-            label="时长（天）"
-          >
+          <el-form-item v-if="batchForm.expireMode === '固定时长'" label="时长（天）">
             <el-input-number v-model="batchForm.days" :min="1" :max="365" />
           </el-form-item>
-          <el-form-item
-            v-if="batchForm.expireMode === '到期日'"
-            label="到期日期"
-          >
+          <el-form-item v-if="batchForm.expireMode === '到期日'" label="到期日期">
             <el-date-picker
               v-model="batchForm.expireAt"
               type="date"
@@ -404,10 +302,7 @@ const submitLabel = () =>
             />
           </el-form-item>
           <el-form-item label="备注">
-            <el-input
-              v-model="batchForm.remark"
-              placeholder="开通原因，便于追溯"
-            />
+            <el-input v-model="batchForm.remark" placeholder="开通原因，便于追溯" />
           </el-form-item>
         </el-form>
       </el-tab-pane>
@@ -431,17 +326,8 @@ const submitLabel = () =>
             </el-radio-group>
           </el-form-item>
           <el-form-item label="权限点" required>
-            <el-select
-              v-model="importForm.perm"
-              placeholder="统一勾选权限点"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="p in permOptions[importForm.type]"
-                :key="p"
-                :label="p"
-                :value="p"
-              />
+            <el-select v-model="importForm.perm" placeholder="统一勾选权限点" style="width: 100%">
+              <el-option v-for="p in permOptions[importForm.type]" :key="p" :label="p" :value="p" />
             </el-select>
           </el-form-item>
           <el-form-item label="有效期" required>
@@ -451,16 +337,10 @@ const submitLabel = () =>
               <el-radio-button value="到期日">到某日期</el-radio-button>
             </el-radio-group>
           </el-form-item>
-          <el-form-item
-            v-if="importForm.expireMode === '固定时长'"
-            label="时长（天）"
-          >
+          <el-form-item v-if="importForm.expireMode === '固定时长'" label="时长（天）">
             <el-input-number v-model="importForm.days" :min="1" :max="365" />
           </el-form-item>
-          <el-form-item
-            v-if="importForm.expireMode === '到期日'"
-            label="到期日期"
-          >
+          <el-form-item v-if="importForm.expireMode === '到期日'" label="到期日期">
             <el-date-picker
               v-model="importForm.expireAt"
               type="date"
@@ -469,10 +349,7 @@ const submitLabel = () =>
             />
           </el-form-item>
           <el-form-item label="备注">
-            <el-input
-              v-model="importForm.remark"
-              placeholder="开通原因，便于追溯"
-            />
+            <el-input v-model="importForm.remark" placeholder="开通原因，便于追溯" />
           </el-form-item>
         </el-form>
       </el-tab-pane>
@@ -480,9 +357,7 @@ const submitLabel = () =>
 
     <template #footer>
       <el-button @click="handleClose">取消</el-button>
-      <el-button type="primary" @click="handleSubmit">{{
-        submitLabel()
-      }}</el-button>
+      <el-button type="primary" @click="handleSubmit">{{ submitLabel() }}</el-button>
     </template>
   </el-dialog>
 </template>

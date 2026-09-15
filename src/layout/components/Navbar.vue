@@ -15,9 +15,11 @@ function handleCommand(command: string) {
       confirmButtonText: "退出",
       cancelButtonText: "取消",
       type: "warning",
-    }).then(() => {
-      userStore.logout();
-      router.push("/login");
+    }).then(async () => {
+      await userStore.logout();
+      router.push("/login").then(() => {
+        window.location.reload();
+      });
     });
   }
 }
@@ -26,10 +28,7 @@ function handleCommand(command: string) {
 <template>
   <header class="navbar">
     <div class="navbar-left">
-      <el-tooltip
-        :content="appStore.collapsed ? '展开菜单' : '折叠菜单'"
-        placement="bottom"
-      >
+      <el-tooltip :content="appStore.collapsed ? '展开菜单' : '折叠菜单'" placement="bottom">
         <button class="collapse-btn" @click="appStore.toggleSidebar()">
           <el-icon :size="18">
             <Expand v-if="appStore.collapsed" />
@@ -41,22 +40,12 @@ function handleCommand(command: string) {
     </div>
 
     <div class="navbar-right">
-      <el-tooltip content="消息通知" placement="bottom">
-        <el-badge :value="3" class="notice-badge">
-          <button class="icon-btn">
-            <el-icon :size="17"><Bell /></el-icon>
-          </button>
-        </el-badge>
-      </el-tooltip>
-
       <el-dropdown trigger="click" @command="handleCommand">
         <div class="user-info">
           <el-avatar :size="30" class="user-avatar">
             {{ userStore.userInfo?.nickname?.charAt(0) || "A" }}
           </el-avatar>
-          <span class="user-name">{{
-            userStore.userInfo?.nickname || "未登录"
-          }}</span>
+          <span class="user-name">{{ userStore.userInfo?.nickname || "未登录" }}</span>
           <el-icon :size="12" color="#9ca3af"><ArrowDown /></el-icon>
         </div>
         <template #dropdown>
@@ -66,7 +55,8 @@ function handleCommand(command: string) {
               {{ userStore.userInfo?.username }}
             </el-dropdown-item>
             <el-dropdown-item divided command="logout">
-              <el-icon><SwitchButton /></el-icon>退出登录
+              <el-icon><SwitchButton /></el-icon>
+              退出登录
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>

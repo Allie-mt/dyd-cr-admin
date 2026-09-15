@@ -1,156 +1,62 @@
 <!-- 白名单管理：灰度开白 / 临时授权 / 内部测试 -->
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { reactive, ref, onMounted } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import addWhitelistDialog from "./addWhitelistDialog.vue";
+import AddWhitelistDialog from "./compoents/addWhitelistDialog.vue";
+import { getWhitelist, revokeWhitelist } from "@/api/whitelist";
+import type { WhitelistRow, WlType, WlStatus } from "@/api/whitelist";
 
-type WlType = "功能" | "模型" | "规格";
-type WlStatus = "active" | "revoked" | "expired";
+const keyword = ref("");
+const typeFilter = ref("");
+const statusFilter = ref("");
+const pageNo = ref(1);
+const pageSize = ref(10);
+const list = ref<WhitelistRow[]>([]);
+const total = ref(0);
+const loading = ref(false);
 
-interface WhitelistRow {
-  id: number;
-  userId: number;
-  nickname: string;
-  phone: string;
-  type: WlType;
-  perm: string;
-  expireMode: "永久" | "固定时长" | "到期日";
-  expireAt: string;
-  status: WlStatus;
-  operator: string;
-  createdAt: string;
-  remark: string;
+async function fetchList() {
+  loading.value = true;
+  try {
+    const res = await getWhitelist({
+      pageNo: pageNo.value,
+      pageSize: pageSize.value,
+      keyword: keyword.value || undefined,
+      type: typeFilter.value || undefined,
+      status: statusFilter.value || undefined,
+    });
+    list.value = res.list;
+    total.value = res.total;
+  } finally {
+    loading.value = false;
+  }
 }
 
-const list = ref<WhitelistRow[]>([
-  {
-    id: 1,
-    userId: 1001,
-    nickname: "夜航星",
-    phone: "13812340921",
-    type: "模型",
-    perm: "视频生成 2.5（灰度）",
-    expireMode: "到期日",
-    expireAt: "2026-10-01",
-    status: "active",
-    operator: "陈雨薇",
-    createdAt: "2026-09-12 16:02",
-    remark: "灰度体验",
-  },
-  {
-    id: 2,
-    userId: 1002,
-    nickname: "柠檬不酸",
-    phone: "15620873411",
-    type: "规格",
-    perm: "4K 分辨率",
-    expireMode: "到期日",
-    expireAt: "2026-09-30",
-    status: "active",
-    operator: "陈雨薇",
-    createdAt: "2026-09-10 14:20",
-    remark: "画质内测",
-  },
-  {
-    id: 3,
-    userId: 1005,
-    nickname: "一只小鹿呀",
-    phone: "17705711892",
-    type: "功能",
-    perm: "字幕擦除（灰度）",
-    expireMode: "固定时长",
-    expireAt: "2026-09-24",
-    status: "active",
-    operator: "系统管理员",
-    createdAt: "2026-09-09 11:15",
-    remark: "字幕灰度放量",
-  },
-  {
-    id: 4,
-    userId: 1003,
-    nickname: "山间清风",
-    phone: "18973102286",
-    type: "功能",
-    perm: "数字人内测",
-    expireMode: "永久",
-    expireAt: "—",
-    status: "active",
-    operator: "系统管理员",
-    createdAt: "2026-08-28 10:40",
-    remark: "内部测试账号",
-  },
-  {
-    id: 5,
-    userId: 1009,
-    nickname: "北城以北",
-    phone: "15829631745",
-    type: "模型",
-    perm: "4K 超清生成",
-    expireMode: "固定时长",
-    expireAt: "2026-09-08",
-    status: "expired",
-    operator: "陈雨薇",
-    createdAt: "2026-08-09 09:22",
-    remark: "4K 内测第一批",
-  },
-  {
-    id: 6,
-    userId: 1006,
-    nickname: "晚风信箱",
-    phone: "15928740366",
-    type: "规格",
-    perm: "1080p 分辨率",
-    expireMode: "到期日",
-    expireAt: "2026-09-20",
-    status: "revoked",
-    operator: "陈雨薇",
-    createdAt: "2026-08-15 15:03",
-    remark: "活动临时授权，提前撤销",
-  },
-  {
-    id: 7,
-    userId: 1010,
-    nickname: "苏打气泡水",
-    phone: "13770389516",
-    type: "功能",
-    perm: "批量生成",
-    expireMode: "到期日",
-    expireAt: "2026-10-15",
-    status: "active",
-    operator: "刘一帆",
-    createdAt: "2026-09-01 10:11",
-    remark: "短期项目",
-  },
-  {
-    id: 8,
-    userId: 1007,
-    nickname: "阿汤哥不喝汤",
-    phone: "13522378098",
-    type: "模型",
-    perm: "数字人 S1（内测）",
-    expireMode: "固定时长",
-    expireAt: "2026-09-05",
-    status: "expired",
-    operator: "系统管理员",
-    createdAt: "2026-08-06 14:48",
-    remark: "内测收集反馈",
-  },
-]);
+function handleSearch() {
+  pageNo.value = 1;
+  fetchList();
+}
 
-// ===== 筛选 =====
-const filter = reactive({ keyword: "", type: "", status: "" });
+function resetFilter() {
+  keyword.value = "";
+  typeFilter.value = "";
+  statusFilter.value = "";
+  pageNo.value = 1;
+  fetchList();
+}
 
-const filtered = computed(() =>
-  list.value.filter(
-    (row) =>
-      (!filter.keyword ||
-        row.nickname.includes(filter.keyword) ||
-        row.phone.includes(filter.keyword) ||
-        String(row.userId).includes(filter.keyword)) &&
-      (!filter.type || row.type === filter.type) &&
-      (!filter.status || row.status === filter.status),
-  ),
-);
+function handlePageChange(val: number) {
+  pageNo.value = val;
+  fetchList();
+}
+
+function handleSizeChange(val: number) {
+  pageSize.value = val;
+  pageNo.value = 1;
+  fetchList();
+}
+
+onMounted(() => fetchList());
 
 const statusText: Record<WlStatus, string> = {
   active: "生效中",
@@ -168,14 +74,13 @@ const typeTag: Record<WlType, "success" | "warning" | "danger"> = {
   规格: "danger",
 };
 
-// ===== 开白弹窗 =====
 const addVisible = ref(false);
 
 function onAddSubmitted(row: WhitelistRow) {
   list.value.unshift(row);
+  total.value += 1;
 }
 
-// ===== 撤销 =====
 function revoke(row: WhitelistRow) {
   ElMessageBox.confirm(
     `确认撤销「${row.nickname}」的「${row.perm}」白名单吗？撤销后权限立即回落至档位默认`,
@@ -185,7 +90,8 @@ function revoke(row: WhitelistRow) {
       cancelButtonText: "取消",
       type: "warning",
     },
-  ).then(() => {
+  ).then(async () => {
+    await revokeWhitelist(row.id);
     row.status = "revoked";
     ElMessage.success("白名单已撤销，权限已回落，已写入审计日志");
   });
@@ -204,40 +110,43 @@ function revoke(row: WhitelistRow) {
     <div class="card-panel">
       <div class="filter-bar">
         <el-input
-          v-model="filter.keyword"
+          v-model="keyword"
           placeholder="搜索用户 / 手机号 / 用户ID"
           clearable
           style="width: 220px"
           :prefix-icon="'Search'"
+          @keyup.enter="handleSearch"
+          @clear="handleSearch"
         />
         <el-select
-          v-model="filter.type"
+          v-model="typeFilter"
           placeholder="白名单类型"
           clearable
           style="width: 130px"
+          @change="handleSearch"
         >
           <el-option label="功能" value="功能" />
           <el-option label="模型" value="模型" />
           <el-option label="规格" value="规格" />
         </el-select>
         <el-select
-          v-model="filter.status"
+          v-model="statusFilter"
           placeholder="状态"
           clearable
           style="width: 110px"
+          @change="handleSearch"
         >
           <el-option label="生效中" value="active" />
           <el-option label="已撤销" value="revoked" />
           <el-option label="已失效" value="expired" />
         </el-select>
+        <el-button :icon="'RefreshLeft'" @click="resetFilter">重置</el-button>
         <div class="filter-actions">
-          <el-button type="primary" :icon="'Plus'" @click="addVisible = true"
-            >开白名单</el-button
-          >
+          <el-button type="primary" :icon="'Plus'" @click="addVisible = true">开白名单</el-button>
         </div>
       </div>
 
-      <el-table :data="filtered" stripe style="width: 100%">
+      <el-table :data="list" stripe style="width: 100%" v-loading="loading">
         <el-table-column label="用户" min-width="180">
           <template #default="{ row }">
             <div v-if="row.userId" class="user-cell">
@@ -252,12 +161,9 @@ function revoke(row: WhitelistRow) {
         </el-table-column>
         <el-table-column label="类型" width="80">
           <template #default="{ row }">
-            <el-tag
-              size="small"
-              effect="plain"
-              :type="typeTag[row.type as WlType]"
-              >{{ row.type }}</el-tag
-            >
+            <el-tag size="small" effect="plain" :type="typeTag[row.type as WlType]">
+              {{ row.type }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="perm" label="权限点" min-width="170" />
@@ -277,12 +183,7 @@ function revoke(row: WhitelistRow) {
         </el-table-column>
         <el-table-column prop="operator" label="开通人" width="100" />
         <el-table-column prop="createdAt" label="开通时间" width="150" />
-        <el-table-column
-          prop="remark"
-          label="备注"
-          min-width="140"
-          show-overflow-tooltip
-        />
+        <el-table-column prop="remark" label="备注" min-width="140" show-overflow-tooltip />
         <el-table-column label="操作" width="90" fixed="right">
           <template #default="{ row }">
             <el-button
@@ -303,14 +204,16 @@ function revoke(row: WhitelistRow) {
         <el-pagination
           background
           layout="total, sizes, prev, pager, next"
-          :total="filtered.length"
-          :page-sizes="[10, 20, 50]"
+          :total="total"
+          :page-size="pageSize"
+          :current-page="pageNo"
+          @current-change="handlePageChange"
+          @size-change="handleSizeChange"
         />
       </div>
     </div>
 
-    <!-- 开白弹窗 -->
-    <addWhitelistDialog v-model="addVisible" @submitted="onAddSubmitted" />
+    <AddWhitelistDialog v-model="addVisible" @submitted="onAddSubmitted" />
   </div>
 </template>
 

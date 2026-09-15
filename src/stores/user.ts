@@ -1,54 +1,111 @@
-import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { defineStore } from "pinia";
+import { Base64 } from "js-base64";
+import myLocalStorage from "@/utils/myLocalStorage";
+import { dropToken } from "@/api/user";
+import { getPermissionIdList } from "@/api/common";
 
 export interface AdminUser {
-  username: string
-  nickname: string
-  role: string
+  userId: string;
+  username: string;
+  nickname: string;
+  role: string;
+  avatar?: string;
+  allUserRoleTypes: string[];
 }
 
-const TOKEN_KEY = 'cr_admin_token'
-const USER_KEY = 'cr_admin_user'
+export const useUserStore = defineStore("user", {
+  state: () => ({
+    token: myLocalStorage.getLocalToken() as string,
+    userInfo: null as AdminUser | null,
+    permissionIdList: [] as string[],
+  }),
 
-// 模拟登录接口
-const MOCK_ACCOUNTS = [
-  { username: 'admin', password: 'admin123', nickname: '系统管理员', role: '超级管理员' },
-]
+  getters: {
+    userRoleName: (state): string => {
+      return state.userInfo?.nickname || "";
+    },
+    userId: (state): string => {
+      return state.userInfo?.userId || "";
+    },
+    userName: (state): string => {
+      return state.userInfo?.username || "";
+    },
+    avatar: (state): string => {
+      return state.userInfo?.avatar || "";
+    },
+  },
 
-function loginApi(username: string, password: string): Promise<AdminUser> {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      const found = MOCK_ACCOUNTS.find(
-        (item) => item.username === username && item.password === password,
-      )
-      if (found) {
-        resolve({ username: found.username, nickname: found.nickname, role: found.role })
-      } else {
-        reject(new Error('账号或密码错误'))
+  actions: {
+    initUserInfo(): void {
+      try {
+        const accessToken = myLocalStorage.getLocalToken();
+        const avatar = myLocalStorage.getLocalAvatar();
+        if (!accessToken) {
+          throw new Error("Token is empty");
+        }
+        const list = accessToken.split(".");
+        if (list && list.length > 1) {
+          const listCode = JSON.parse(Base64.decode(list[1]));
+          const roleTypes = listCode.authorities
+            ? listCode.authorities.map((item: string) => {
+                return item.substring(0, item.lastIndexOf("#"));
+              })
+            : [];
+          this.userInfo = {
+            userId: listCode.userId || "",
+            username: listCode.userName || "",
+            nickname: listCode.nickname || "",
+            role: listCode.role_name || "",
+            avatar: avatar || "",
+            allUserRoleTypes: listCode.authorities || [],
+          };
+        }
+      } catch (error) {
+        console.error("Failed to parse token:", error);
+        throw error;
       }
-    }, 600)
-  })
-}
+    },
 
-// 用户登录态
-export const useUserStore = defineStore('user', () => {
-  const token = ref<string>(localStorage.getItem(TOKEN_KEY) || '')
-  const userInfo = ref<AdminUser | null>(JSON.parse(localStorage.getItem(USER_KEY) || 'null'))
+    async logout() {
+      try {
+        await dropToken();
+      } catch {
+        // ignore
+      }
+      this.clearUserInfo();
+    },
 
-  async function login(username: string, password: string) {
-    const user = await loginApi(username, password)
-    token.value = `mock-token-${Date.now()}`
-    userInfo.value = user
-    localStorage.setItem(TOKEN_KEY, token.value)
-    localStorage.setItem(USER_KEY, JSON.stringify(user))
-  }
+    setPermissionList(scopes: string[]) {
+      this.permissionIdList = scopes;
+    },
 
-  function logout() {
-    token.value = ''
-    userInfo.value = null
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(USER_KEY)
-  }
+    clearUserInfo() {
+      this.token = "";
+      this.userInfo = null;
+      this.permissionIdList = [];
+      myLocalStorage.removeAll();
+    },
 
-  return { token, userInfo, login, logout }
-})
+    async getPermissionIds(): Promise<void> {
+      try {
+        const { data } = await getPermissionIdList();
+        if (data && data.menuCodeList) {
+          let codes: string[] = [];
+          if (data.permissionCodeList) {
+            const permissionCodeList = data.permissionCodeList.map((str: string) => {
+              return str.replace(/^(GET#:|POST#:)/, "");
+            });
+            codes = [...data.menuCodeList, ...permissionCodeList];
+          } else {
+            codes = data.menuCodeList;
+          }
+          this.permissionIdList = codes;
+        } else {
+          throw new Error("账户权限码获取失败！");
+        }
+      } catch (error) {
+        throw new Error(error as string);
+      }
+    },
+  },
+});

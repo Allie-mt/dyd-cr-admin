@@ -3,6 +3,9 @@
 import { reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage, type FormInstance, type FormRules } from "element-plus";
+import { md5 } from "js-md5";
+import { userAccountLogin } from "@/api/user";
+import myLocalStorage from "@/utils/myLocalStorage";
 import { useUserStore } from "@/stores/user";
 
 const router = useRouter();
@@ -14,18 +17,45 @@ const loading = ref(false);
 const showPassword = ref(false);
 
 const loginForm = reactive({
-  username: "admin",
+  username: "",
   password: "",
   remember: true,
 });
 
 const rules: FormRules<typeof loginForm> = {
   username: [{ required: true, message: "请输入账号", trigger: "blur" }],
-  password: [
-    { required: true, message: "请输入密码", trigger: "blur" },
-    { min: 6, max: 20, message: "密码长度 6-20 位", trigger: "blur" },
-  ],
+  password: [{ required: true, message: "请输入密码", trigger: "blur" }],
 };
+
+async function routerPush() {
+  try {
+    await userStore.getPermissionIds();
+  } catch (error) {
+    ElMessage.error("权限服务出错，请联系技术人员处理。");
+    return;
+  }
+
+  if (!userStore.permissionIdList.length) {
+    ElMessage.warning("您没有权限访问，请联系管理员。");
+    myLocalStorage.removeAll();
+    return;
+  }
+
+  const redirectUrl = route.query.redirectUrl as string;
+  if (redirectUrl) {
+    const decoded = decodeURIComponent(redirectUrl);
+    if (decoded !== "/" && decoded !== "/login") {
+      router.push(decoded);
+      return;
+    }
+  }
+  const redirect = route.query.redirect as string;
+  if (redirect && redirect !== "/login") {
+    router.push(redirect);
+  } else {
+    router.push("/");
+  }
+}
 
 async function handleLogin() {
   const valid = await formRef.value?.validate().catch(() => false);
@@ -33,9 +63,27 @@ async function handleLogin() {
 
   loading.value = true;
   try {
-    await userStore.login(loginForm.username, loginForm.password);
-    ElMessage.success("登录成功");
-    router.push((route.query.redirect as string) || "/");
+    const res = await userAccountLogin({
+      username: loginForm.username,
+      password: md5(loginForm.password),
+    });
+    if (res.code === "000000" && res.data) {
+      const { data } = res;
+
+      userStore.clearUserInfo();
+
+      myLocalStorage.setLocalToken(data.access_token);
+      myLocalStorage.setRefreshToken(data.refresh_token);
+      if (data.avatar) {
+        myLocalStorage.setLocalAvatar(data.avatar);
+      }
+
+      userStore.initUserInfo();
+
+      await routerPush();
+    } else {
+      ElMessage.error(res.msg || res.error_description || "登录失败");
+    }
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : "登录失败");
   } finally {
@@ -56,9 +104,18 @@ async function handleLogin() {
         <h1 class="brand-title">CR+ 平台后台</h1>
         <p class="brand-sub">企业级权限管控与运营中枢</p>
         <ul class="brand-features">
-          <li><span class="dot" />企业管理与 C 端用户一体化治理</li>
-          <li><span class="dot" />细粒度角色权限与菜单授权</li>
-          <li><span class="dot" />功能开关 · 审计日志 · 白名单体系</li>
+          <li>
+            <span class="dot" />
+            企业管理与 C 端用户一体化治理
+          </li>
+          <li>
+            <span class="dot" />
+            细粒度角色权限与菜单授权
+          </li>
+          <li>
+            <span class="dot" />
+            功能开关 · 审计日志 · 白名单体系
+          </li>
         </ul>
       </div>
       <div class="brand-footer">© 2026 CR+ Platform · 权限体系 v1.0</div>
@@ -95,10 +152,7 @@ async function handleLogin() {
               autocomplete="current-password"
             >
               <template #suffix>
-                <el-icon
-                  class="pwd-toggle"
-                  @click="showPassword = !showPassword"
-                >
+                <el-icon class="pwd-toggle" @click="showPassword = !showPassword">
                   <View v-if="showPassword" />
                   <Hide v-else />
                 </el-icon>
@@ -120,11 +174,6 @@ async function handleLogin() {
             {{ loading ? "登录中…" : "登 录" }}
           </el-button>
         </el-form>
-
-        <div class="login-tip">
-          <el-icon><InfoFilled /></el-icon>
-          演示账号：admin / admin123
-        </div>
       </div>
     </div>
   </div>
@@ -147,22 +196,14 @@ async function handleLogin() {
   min-width: 420px;
   padding: 64px;
   color: #fff;
-  background: linear-gradient(
-    150deg,
-    $primary 0%,
-    $primary-dark 55%,
-    $primary-deep 100%
-  );
+  background: linear-gradient(150deg, $primary 0%, $primary-dark 55%, $primary-deep 100%);
   overflow: hidden;
 
   // 点阵纹理
   .brand-grid {
     position: absolute;
     inset: 0;
-    background-image: radial-gradient(
-      rgba(255, 255, 255, 0.14) 1px,
-      transparent 1px
-    );
+    background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1px, transparent 1px);
     background-size: 26px 26px;
   }
 

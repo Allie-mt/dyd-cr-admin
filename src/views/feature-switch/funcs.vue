@@ -1,67 +1,16 @@
+<!-- 功能开关 -->
 <script setup lang="ts">
 import { reactive } from "vue";
 import { ElMessage } from "element-plus";
+import { mockGetFuncs, mockModes } from "@/api/featureSwitch";
+import type { FuncSwitch, ReleaseMode } from "@/api/featureSwitch";
 
-type ReleaseMode = "全量" | "按比例灰度" | "白名单";
+const funcs = reactive<FuncSwitch[]>(mockGetFuncs());
 
-interface FuncSwitch {
-  key: string;
-  name: string;
-  desc: string;
-  enabled: boolean;
-  mode: ReleaseMode;
-  ratio: number;
-}
-
-const funcs = reactive<FuncSwitch[]>([
-  {
-    key: "script",
-    name: "脚本生成",
-    desc: "AI 脚本创作模块",
-    enabled: true,
-    mode: "全量",
-    ratio: 100,
-  },
-  {
-    key: "image",
-    name: "图片生成",
-    desc: "文生图与图片编辑",
-    enabled: true,
-    mode: "全量",
-    ratio: 100,
-  },
-  {
-    key: "video",
-    name: "视频生成",
-    desc: "文生视频模块",
-    enabled: true,
-    mode: "按比例灰度",
-    ratio: 50,
-  },
-  {
-    key: "digital",
-    name: "数字人",
-    desc: "数字人克隆与制作",
-    enabled: true,
-    mode: "白名单",
-    ratio: 0,
-  },
-  {
-    key: "subtitle",
-    name: "字幕处理",
-    desc: "字幕识别与擦除",
-    enabled: true,
-    mode: "按比例灰度",
-    ratio: 20,
-  },
-]);
-
-const modes: ReleaseMode[] = ["全量", "按比例灰度", "白名单"];
+const modes: ReleaseMode[] = mockModes;
 
 function toggleFunc(item: FuncSwitch) {
-  ElMessage.success(
-    `功能「${item.name}」已${item.enabled ? "开启" : "关闭"}，已写入审计日志`,
-  );
+  ElMessage.success(`功能「${item.name}」已${item.enabled ? "开启" : "关闭"}，已写入审计日志`);
 }
 
 function saveGray(item: FuncSwitch) {
@@ -78,9 +27,9 @@ function saveGray(item: FuncSwitch) {
 <template>
   <div class="page-container">
     <div class="filter-bar">
-      <span class="page-tip"
-        >全局控制功能模块上下线；灰度支持按用户比例放量或仅白名单可用，关闭总开关后灰度策略不生效</span
-      >
+      <span class="page-tip">
+        全局控制功能模块上下线；灰度支持按用户比例放量或仅白名单可用，关闭总开关后灰度策略不生效
+      </span>
     </div>
 
     <div v-for="item in funcs" :key="item.key" class="card-panel func-card">
@@ -95,14 +44,8 @@ function saveGray(item: FuncSwitch) {
       <div class="func-body">
         <div class="gray-row">
           <span class="gray-label">发布策略</span>
-          <el-radio-group
-            v-model="item.mode"
-            :disabled="!item.enabled"
-            size="small"
-          >
-            <el-radio-button v-for="m in modes" :key="m" :value="m">{{
-              m
-            }}</el-radio-button>
+          <el-radio-group v-model="item.mode" :disabled="!item.enabled" size="small">
+            <el-radio-button v-for="m in modes" :key="m" :value="m">{{ m }}</el-radio-button>
           </el-radio-group>
         </div>
         <div v-if="item.mode === '按比例灰度' && item.enabled" class="gray-row">
@@ -124,12 +67,7 @@ function saveGray(item: FuncSwitch) {
           title="当前策略下仅白名单内用户可使用该功能，可前往「白名单管理」配置开白名单单"
         />
         <div class="gray-actions">
-          <el-button
-            type="primary"
-            size="small"
-            :disabled="!item.enabled"
-            @click="saveGray(item)"
-          >
+          <el-button type="primary" size="small" :disabled="!item.enabled" @click="saveGray(item)">
             保存策略
           </el-button>
         </div>
